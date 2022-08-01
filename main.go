@@ -7,6 +7,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/schollz/progressbar/v3"
 	"github.com/zmb3/spotify"
 )
 
@@ -127,6 +128,9 @@ func main() {
 		log.Printf("Adding %d tracks to holding playlist", len(newTracks))
 		start := time.Now()
 
+		originalNewTracksCount := len(newTracks)
+		bar := progressbar.NewOptions(originalNewTracksCount, progressbar.OptionShowBytes(false), progressbar.OptionShowCount(), progressbar.OptionSetDescription("Saving tracks to holding playlist..."))
+
 		for len(newTracks) > 0 {
 			if len(newTracks) < 100 {
 				maxTrackCount = len(newTracks)
@@ -134,17 +138,28 @@ func main() {
 				maxTrackCount = 99
 			}
 
-			client.AddTracksToPlaylist(playlistHolding.ID, newTracks[0:maxTrackCount]...)
+			newTracksInstance := newTracks[0:maxTrackCount]
+
+			client.AddTracksToPlaylist(playlistHolding.ID, newTracksInstance...)
+			bar.Add(len(newTracksInstance))
 
 			if len(newTracks) != maxTrackCount {
-				newTracks = append(newTracks, newTracks[maxTrackCount+1:]...)
+				newTracks = newTracks[maxTrackCount+1:]
 			} else {
 				newTracks = []spotify.ID{}
 			}
 		}
 
 		duration := time.Since(start)
-		log.Printf("Added %d tracks to holding playlist in %v", len(newTracks), duration)
+
+		var trackWord string
+		if originalNewTracksCount != 1 {
+			trackWord = "tracks"
+		} else {
+			trackWord = "track"
+		}
+
+		log.Printf("\nAdded %d %s to holding playlist in %v", originalNewTracksCount, trackWord, duration)
 	} else {
 		log.Println("No new tracks found")
 	}
