@@ -36,7 +36,7 @@ func completeAuth(w http.ResponseWriter, r *http.Request) {
 	ch <- &client
 }
 
-func getPlaylistTracks(client *spotify.Client, playlistId spotify.ID) []spotify.ID {
+func getPlaylistTracks(client *spotify.Client, playlistId spotify.ID, bar *progressbar.ProgressBar) []spotify.ID {
 	var allTracks []spotify.ID
 
 	tracks, err := client.GetPlaylistTracks(playlistId)
@@ -48,6 +48,7 @@ func getPlaylistTracks(client *spotify.Client, playlistId spotify.ID) []spotify.
 	for page := 1; ; page++ {
 		for _, track := range tracks.Tracks {
 			allTracks = append(allTracks, track.Track.ID)
+			bar.Add(1)
 		}
 
 		err = client.NextPage(tracks)
@@ -107,8 +108,15 @@ func main() {
 	}
 
 	start := time.Now()
-	playlistMainTracks := getPlaylistTracks(client, playlistMain.ID)
-	playlistHoldingTracks := getPlaylistTracks(client, playlistHolding.ID)
+
+	mainBar := progressbar.NewOptions(playlistMain.Tracks.Total, progressbar.OptionShowBytes(false), progressbar.OptionShowCount(), progressbar.OptionSetDescription("Loading tracks from main playlist..."), progressbar.OptionOnCompletion(func() { fmt.Println() }))
+	playlistMainTracks := getPlaylistTracks(client, playlistMain.ID, mainBar)
+	mainBar.Close()
+
+	holdingBar := progressbar.NewOptions(playlistHolding.Tracks.Total, progressbar.OptionShowBytes(false), progressbar.OptionShowCount(), progressbar.OptionSetDescription("Loading tracks from holding playlist..."), progressbar.OptionOnCompletion(func() { fmt.Println() }))
+	playlistHoldingTracks := getPlaylistTracks(client, playlistHolding.ID, holdingBar)
+	holdingBar.Close()
+
 	duration := time.Since(start)
 
 	log.Printf("Loaded %d tracks in %v", len(playlistMainTracks)+len(playlistHoldingTracks), duration)
@@ -129,7 +137,7 @@ func main() {
 		start := time.Now()
 
 		originalNewTracksCount := len(newTracks)
-		bar := progressbar.NewOptions(originalNewTracksCount, progressbar.OptionShowBytes(false), progressbar.OptionShowCount(), progressbar.OptionSetDescription("Saving tracks to holding playlist..."))
+		bar := progressbar.NewOptions(originalNewTracksCount, progressbar.OptionShowBytes(false), progressbar.OptionShowCount(), progressbar.OptionSetDescription("Saving tracks to holding playlist..."), progressbar.OptionOnCompletion(func() { fmt.Println() }))
 
 		for len(newTracks) > 0 {
 			if len(newTracks) < 100 {
@@ -151,6 +159,7 @@ func main() {
 		}
 
 		duration := time.Since(start)
+		bar.Close()
 
 		var trackWord string
 		if originalNewTracksCount != 1 {
