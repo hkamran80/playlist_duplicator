@@ -1,60 +1,65 @@
+/*
+	Playlist Duplicator - A simple way to duplicate the contents of one Spotify playlist into another
+    Copyright (C) 2022 H. Kamran (https://hkamran.com)
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU Affero General Public License as published
+    by the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU Affero General Public License for more details.
+
+    You should have received a copy of the GNU Affero General Public License
+    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+*/
+
 package main
 
 import (
+	"context"
 	"fmt"
-	"log"
-	"net/http"
 	"os"
+	"strconv"
 	"time"
 
+	"log"
+
+	"github.com/gtuk/discordwebhook"
+	"github.com/joho/godotenv"
+
+	spotifyauth "github.com/zmb3/spotify/v2/auth"
+
 	"github.com/schollz/progressbar/v3"
-	"github.com/zmb3/spotify"
+
+	"github.com/zmb3/spotify/v2"
 )
 
-const redirectURI = "http://localhost:8080/callback"
-
-var (
-	auth  = spotify.NewAuthenticator(redirectURI, spotify.ScopeUserReadPrivate, spotify.ScopePlaylistReadPrivate, spotify.ScopePlaylistReadCollaborative, spotify.ScopePlaylistModifyPublic, spotify.ScopePlaylistModifyPrivate)
-	ch    = make(chan *spotify.Client)
-	state = "abc123"
-)
-
-func completeAuth(w http.ResponseWriter, r *http.Request) {
-	tok, err := auth.Token(state, r)
-	if err != nil {
-		http.Error(w, "Couldn't get token", http.StatusForbidden)
-		log.Fatal(err)
-	}
-	if st := r.FormValue("state"); st != state {
-		http.NotFound(w, r)
-		log.Fatalf("State mismatch: %s != %s\n", st, state)
-	}
-
-	// Create client from token URL
-	client := auth.NewClient(tok)
-	fmt.Fprintf(w, "Authorized!")
-	ch <- &client
-}
-
-func getPlaylistTracks(client *spotify.Client, playlistId spotify.ID, bar *progressbar.ProgressBar) []spotify.ID {
+func getPlaylistTracks(client *spotify.Client, context *context.Context, playlistId spotify.ID, bar *progressbar.ProgressBar) []spotify.ID {
 	var allTracks []spotify.ID
 
-	tracks, err := client.GetPlaylistTracks(playlistId)
+	items, err := client.GetPlaylistItems(*context, playlistId)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	log.Printf("Playlist has %d total tracks", tracks.Total)
+	log.Printf("Playlist has %d total tracks", items.Total)
 	for page := 1; ; page++ {
-		for _, track := range tracks.Tracks {
-			allTracks = append(allTracks, track.Track.ID)
-			bar.Add(1)
+		for _, item := range items.Items {
+			// Check if the item is an actual track
+			if item.Track.Track != nil {
+				allTracks = append(allTracks, item.Track.Track.ID)
+				bar.Add(1)
+			}
 		}
 
-		err = client.NextPage(tracks)
+		err = client.NextPage(*context, items)
 		if err == spotify.ErrNoMorePages {
 			break
 		}
+
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -73,22 +78,51 @@ func contains(s []spotify.ID, str spotify.ID) bool {
 	return false
 }
 
+func sendNotification(content string) {
+	discordWebhookUrl := os.Getenv("DISCORD_WEBHOOK_URL")
+	if discordWebhookUrl != "" {
+		username := "Playlist Duplicator"
+
+		title := "Playlist Duplicator"
+		colour := "1947988"
+		footerText := "Playlist Duplicator is an open-source program created by H. Kamran"
+
+		footer := discordwebhook.Footer{Text: &footerText}
+		embed := discordwebhook.Embed{Title: &title, Description: &content, Color: &colour, Footer: &footer}
+		message := discordwebhook.Message{Username: &username, Embeds: &[]discordwebhook.Embed{embed}}
+
+		err := discordwebhook.SendMessage(discordWebhookUrl, message)
+		if err != nil {
+			fmt.Println(err)
+		}
+	}
+}
+
+func checkIfEnvVarsLoaded() bool {
+	spotifyId := os.Getenv("SPOTIFY_ID")
+	spotifySecret := os.Getenv("SPOTIFY_SECRET")
+	spotifyPlaylistId := os.Getenv("SPOTIFY_PLAYLIST_ID")
+	spotifyHoldingPlaylistId := os.Getenv("SPOTIFY_HOLDING_PLAYLIST_ID")
+
+	return spotifyId != "" && spotifySecret != "" && spotifyPlaylistId != "" && spotifyHoldingPlaylistId != ""
+}
+
 func main() {
-	// Start HTTP
-	http.HandleFunc("/callback", completeAuth)
-	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		log.Println("Got request for:", r.URL.String())
-	})
-	go http.ListenAndServe(":8080", nil)
+	envVarsLoaded := checkIfEnvVarsLoaded()
+	if !envVarsLoaded {
+		err := godotenv.Load()
+		if err != nil {
+			log.Fatal("Error loading .env file")
+		}
+	}
 
-	url := auth.AuthURL(state)
-	fmt.Println("Authenticate by visiting the following page in your browser:", url)
+	auth := spotifyauth.New(spotifyauth.WithRedirectURL("http://localhost:8080/callback"), spotifyauth.WithScopes(spotifyauth.ScopeUserReadPrivate, spotifyauth.ScopePlaylistReadPrivate, spotifyauth.ScopePlaylistReadCollaborative, spotifyauth.ScopePlaylistModifyPublic, spotifyauth.ScopePlaylistModifyPrivate))
+	state := strconv.FormatInt(time.Now().Unix(), 10)
+	ctx := context.Background()
 
-	// Stand by for authentication
-	client := <-ch
+	client := Authenticate(ctx, *auth, state)
 
-	// Current user data
-	user, err := client.CurrentUser()
+	user, err := client.CurrentUser(ctx)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -96,25 +130,31 @@ func main() {
 	log.Printf("Logged in as %s (%s)", user.ID, user.DisplayName)
 
 	// Main Playlist
-	playlistMain, err := client.GetPlaylist(spotify.ID(os.Getenv("SPOTIFY_PLAYLIST_ID")))
+	playlistMain, err := client.GetPlaylist(ctx, spotify.ID(os.Getenv("SPOTIFY_PLAYLIST_ID")))
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	// Holding Playlist
-	playlistHolding, err := client.GetPlaylist(spotify.ID(os.Getenv("SPOTIFY_HOLDING_PLAYLIST_ID")))
+	playlistHolding, err := client.GetPlaylist(ctx, spotify.ID(os.Getenv("SPOTIFY_HOLDING_PLAYLIST_ID")))
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	start := time.Now()
 
-	mainBar := progressbar.NewOptions(playlistMain.Tracks.Total, progressbar.OptionShowBytes(false), progressbar.OptionShowCount(), progressbar.OptionSetDescription("Loading tracks from main playlist..."), progressbar.OptionOnCompletion(func() { fmt.Println() }))
-	playlistMainTracks := getPlaylistTracks(client, playlistMain.ID, mainBar)
+	mainBar := progressbar.NewOptions(playlistMain.Tracks.Total, progressbar.OptionShowBytes(false), progressbar.OptionShowCount(), progressbar.OptionSetDescription("Loading tracks from main playlist..."),
+		progressbar.OptionOnCompletion(func() {
+			fmt.Printf("\n")
+		}))
+	playlistMainTracks := getPlaylistTracks(client, &ctx, playlistMain.ID, mainBar)
 	mainBar.Close()
 
-	holdingBar := progressbar.NewOptions(playlistHolding.Tracks.Total, progressbar.OptionShowBytes(false), progressbar.OptionShowCount(), progressbar.OptionSetDescription("Loading tracks from holding playlist..."), progressbar.OptionOnCompletion(func() { fmt.Println() }))
-	playlistHoldingTracks := getPlaylistTracks(client, playlistHolding.ID, holdingBar)
+	holdingBar := progressbar.NewOptions(playlistHolding.Tracks.Total, progressbar.OptionShowBytes(false), progressbar.OptionShowCount(), progressbar.OptionSetDescription("Loading tracks from holding playlist..."),
+		progressbar.OptionOnCompletion(func() {
+			fmt.Printf("\n")
+		}))
+	playlistHoldingTracks := getPlaylistTracks(client, &ctx, playlistHolding.ID, holdingBar)
 	holdingBar.Close()
 
 	duration := time.Since(start)
@@ -137,9 +177,13 @@ func main() {
 		start := time.Now()
 
 		originalNewTracksCount := len(newTracks)
-		bar := progressbar.NewOptions(originalNewTracksCount, progressbar.OptionShowBytes(false), progressbar.OptionShowCount(), progressbar.OptionSetDescription("Saving tracks to holding playlist..."), progressbar.OptionOnCompletion(func() { fmt.Println() }))
+		bar := progressbar.NewOptions(originalNewTracksCount, progressbar.OptionShowBytes(false), progressbar.OptionShowCount(), progressbar.OptionSetDescription("Saving tracks to holding playlist..."),
+			progressbar.OptionOnCompletion(func() {
+				fmt.Printf("\n")
+			}))
 
 		for len(newTracks) > 0 {
+			// Spotify enforces a maximum of 100 tracks per `AddTracksToPlaylist` call
 			if len(newTracks) < 100 {
 				maxTrackCount = len(newTracks)
 			} else {
@@ -148,7 +192,11 @@ func main() {
 
 			newTracksInstance := newTracks[0:maxTrackCount]
 
-			client.AddTracksToPlaylist(playlistHolding.ID, newTracksInstance...)
+			_, err := client.AddTracksToPlaylist(ctx, playlistHolding.ID, newTracksInstance...)
+			if err != nil {
+				log.Panic(err)
+			}
+
 			bar.Add(len(newTracksInstance))
 
 			if len(newTracks) != maxTrackCount {
@@ -168,8 +216,12 @@ func main() {
 			trackWord = "track"
 		}
 
-		log.Printf("\nAdded %d %s to holding playlist in %v", originalNewTracksCount, trackWord, duration)
+		finishedMessage := fmt.Sprintf("Added %d %s to holding playlist in %v", originalNewTracksCount, trackWord, duration)
+		log.Println(finishedMessage)
+
+		sendNotification(finishedMessage)
 	} else {
 		log.Println("No new tracks found")
+		sendNotification("No new tracks found")
 	}
 }
