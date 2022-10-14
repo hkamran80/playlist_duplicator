@@ -23,7 +23,7 @@ A simple way to duplicate the contents of one Spotify playlist into another.
         - Give it a name, then copy the URL
     4. Paste the URL
 
-**Note:** Environment variables can be set in a `.env` file or directly through the terminal
+Environment variables can be set directly or via a `.env` file
 
 ## Usage
 
