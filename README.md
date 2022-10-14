@@ -53,7 +53,7 @@ After that, either have a `token.json` file on hand (from a previous run) or cre
 docker run --rm -v token.json:/token.json --env-file .env playlist-duplicator:v2.0
 ```
 
-#### With standard environment variables
+#### With environment variables as parameters
 
 ```bash
 docker run --rm -v token.json:/token.json -e SPOTIFY_ID=xxx -e SPOTIFY_SECRET=xxx -e SPOTIFY_PLAYLIST_ID=xxx -e SPOTIFY_HOLDING_PLAYLIST_ID=xxx playlist-duplicator:v2.0
@@ -61,7 +61,7 @@ docker run --rm -v token.json:/token.json -e SPOTIFY_ID=xxx -e SPOTIFY_SECRET=xx
 
 ## License
 
-```
+```text
 Playlist Duplicator - A simple way to duplicate the contents of one Spotify playlist into another
 Copyright (C) 2022 H. Kamran (https://hkamran.com)
 
