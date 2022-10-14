@@ -2,7 +2,7 @@
 
 A simple way to duplicate the contents of one Spotify playlist into another.
 
-**Note:** Due to a limitation with the [Spotify API library being used](https://github.com/zmb3/spotify), podcast episodes in a playlist will not be transferred at this time.
+**Note:** Due to a limitation with the [Spotify API library being used](https://github.com/zmb3/spotify/issues/180), podcast episodes in a playlist will not be transferred at this time.
 
 ## Prerequisites
 
