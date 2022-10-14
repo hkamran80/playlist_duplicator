@@ -37,7 +37,7 @@ import (
 	"github.com/zmb3/spotify/v2"
 )
 
-func getPlaylistTracks(client *spotify.Client, context *context.Context, playlistId spotify.ID, bar *progressbar.ProgressBar) []spotify.ID {
+func GetPlaylistTracks(client *spotify.Client, context *context.Context, playlistId spotify.ID, bar *progressbar.ProgressBar) []spotify.ID {
 	var allTracks []spotify.ID
 
 	items, err := client.GetPlaylistItems(*context, playlistId)
@@ -68,7 +68,7 @@ func getPlaylistTracks(client *spotify.Client, context *context.Context, playlis
 	return allTracks
 }
 
-func contains(s []spotify.ID, str spotify.ID) bool {
+func Contains(s []spotify.ID, str spotify.ID) bool {
 	for _, v := range s {
 		if v == str {
 			return true
@@ -78,7 +78,7 @@ func contains(s []spotify.ID, str spotify.ID) bool {
 	return false
 }
 
-func sendNotification(content string) {
+func SendNotification(content string) {
 	discordWebhookUrl := os.Getenv("DISCORD_WEBHOOK_URL")
 	if discordWebhookUrl != "" {
 		username := "Playlist Duplicator"
@@ -147,14 +147,14 @@ func main() {
 		progressbar.OptionOnCompletion(func() {
 			fmt.Printf("\n")
 		}))
-	playlistMainTracks := getPlaylistTracks(client, &ctx, playlistMain.ID, mainBar)
+	playlistMainTracks := GetPlaylistTracks(client, &ctx, playlistMain.ID, mainBar)
 	mainBar.Close()
 
 	holdingBar := progressbar.NewOptions(playlistHolding.Tracks.Total, progressbar.OptionShowBytes(false), progressbar.OptionShowCount(), progressbar.OptionSetDescription("Loading tracks from holding playlist..."),
 		progressbar.OptionOnCompletion(func() {
 			fmt.Printf("\n")
 		}))
-	playlistHoldingTracks := getPlaylistTracks(client, &ctx, playlistHolding.ID, holdingBar)
+	playlistHoldingTracks := GetPlaylistTracks(client, &ctx, playlistHolding.ID, holdingBar)
 	holdingBar.Close()
 
 	duration := time.Since(start)
@@ -167,7 +167,7 @@ func main() {
 	)
 
 	for _, trackId := range playlistMainTracks {
-		if !contains(playlistHoldingTracks, trackId) {
+		if !Contains(playlistHoldingTracks, trackId) {
 			newTracks = append(newTracks, trackId)
 		}
 	}
@@ -219,9 +219,9 @@ func main() {
 		finishedMessage := fmt.Sprintf("Added %d %s to holding playlist in %v", originalNewTracksCount, trackWord, duration)
 		log.Println(finishedMessage)
 
-		sendNotification(finishedMessage)
+		SendNotification(finishedMessage)
 	} else {
 		log.Println("No new tracks found")
-		sendNotification("No new tracks found")
+		SendNotification("No new tracks found")
 	}
 }
