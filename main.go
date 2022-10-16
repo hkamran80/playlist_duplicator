@@ -223,7 +223,7 @@ func main() {
 	} else {
 		log.Println("No new tracks found")
 
-		if sendEmptyNotification := os.Getenv("SEND_EMPTY_NOTIFICATIONS"); sendEmptyNotification != "false" {
+		if sendEmptyNotifications := os.Getenv("SEND_EMPTY_NOTIFICATIONS"); sendEmptyNotifications != "false" {
 			SendNotification("No new tracks found")
 		}
 	}
