@@ -6,6 +6,8 @@ A simple way to duplicate the contents of one Spotify playlist into another.
 
 ## Prerequisites
 
+Environment variables can be set directly or via a `.env` file
+
 1. Go to the [Spotify developer dashboard](https://developer.spotify.com/dashboard/applications) and create an application
     - Copy the client ID and secret
     - Click "Edit Settings" and `http://localhost:8080/callback` to the "Redirect URIs" section
@@ -23,7 +25,7 @@ A simple way to duplicate the contents of one Spotify playlist into another.
         - Give it a name, then copy the URL
     4. Paste the URL
 
-Environment variables can be set directly or via a `.env` file
+If you do not want to receive notifications about no new tracks being found, set the `SEND_EMPTY_NOTIFICATIONS` variable to `false` (must be all lowercase).
 
 ## Usage
 
