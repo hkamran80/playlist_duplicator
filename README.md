@@ -42,7 +42,7 @@ On the first run, you will be prompted to copy a URL to your browser, then paste
 Using the Docker container requires cloning the repository, then building it with the following command:
 
 ```bash
-docker build -t playlist-duplicator:v2.0 .
+docker build -t playlist-duplicator:v2.0.1 .
 ```
 
 After that, either have a `token.json` file on hand (from a previous run) or create an empty `token.json`. Bind mount the `token.json` to the container, as well as adding your environment variables.
@@ -52,13 +52,13 @@ After that, either have a `token.json` file on hand (from a previous run) or cre
 #### With `.env` file
 
 ```bash
-docker run --rm -v token.json:/token.json --env-file .env playlist-duplicator:v2.0
+docker run --rm -v token.json:/token.json --env-file .env playlist-duplicator:v2.0.1
 ```
 
 #### With environment variables as parameters
 
 ```bash
-docker run --rm -v token.json:/token.json -e SPOTIFY_ID=xxx -e SPOTIFY_SECRET=xxx -e SPOTIFY_PLAYLIST_ID=xxx -e SPOTIFY_HOLDING_PLAYLIST_ID=xxx playlist-duplicator:v2.0
+docker run --rm -v token.json:/token.json -e SPOTIFY_ID=xxx -e SPOTIFY_SECRET=xxx -e SPOTIFY_PLAYLIST_ID=xxx -e SPOTIFY_HOLDING_PLAYLIST_ID=xxx playlist-duplicator:v2.0.1
 ```
 
 ## License
